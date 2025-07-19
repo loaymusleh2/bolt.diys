@@ -19,7 +19,7 @@ import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
 import GitCloneButton from './GitCloneButton';
 import type { ProviderInfo } from '~/types/model';
 import StarterTemplates from './StarterTemplates';
-import type { ActionAlert, SupabaseAlert, DeployAlert, LlmErrorAlertType } from '~/types/actions';
+import type { ActionAlert, DeployAlert, LlmErrorAlertType, SupabaseAlert } from '~/types/actions';
 import DeployChatAlert from '~/components/deploy/DeployAlert';
 import ChatAlert from './ChatAlert';
 import type { ModelInfo } from '~/lib/modules/llm/types';
@@ -33,6 +33,19 @@ import { ChatBox } from './ChatBox';
 import type { DesignScheme } from '~/types/design-scheme';
 import type { ElementInfo } from '~/components/workbench/Inspector';
 import LlmErrorAlert from './LLMApiAlert';
+import AgentStatus from './AgentStatus';
+import AgentControls from './AgentControls';
+import TaskTemplates from './TaskTemplates';
+import BmadControls from './BmadControls';
+import type { ChatMode } from '~/types/actions';
+import type { TaskTemplate } from '~/lib/agent/templates';
+import type { BmadState } from '~/types/bmad';
+import type { BmadExecutor } from '~/lib/agent/bmad-executor';
+
+/*
+ * import { CommandAutoComplete } from './CommandAutoComplete';
+ * import { ContextDisplay, ContextIndicator } from './ContextDisplay';
+ */
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -81,6 +94,23 @@ interface BaseChatProps {
   selectedElement?: ElementInfo | null;
   setSelectedElement?: (element: ElementInfo | null) => void;
   addToolResult?: ({ toolCallId, result }: { toolCallId: string; result: any }) => void;
+  agentMode?: ChatMode;
+  setAgentMode?: (mode: ChatMode) => void;
+  agentExecutor?: any; // AgentExecutor instance
+  onTemplateSelect?: (template: TaskTemplate) => void;
+  bmadState?: BmadState;
+  bmadExecutor?: BmadExecutor;
+
+  /*
+   * showCommandAutoComplete?: boolean;
+   * onCommandSelect?: (command: string) => void;
+   * onCommandAutoCompleteClose?: () => void;
+   * contextFiles?: Array<{ path: string; content: string }>;
+   * onRemoveContextFile?: (path: string) => void;
+   * onClearContext?: () => void;
+   * showContextDisplay?: boolean;
+   * onToggleContextDisplay?: () => void;
+   */
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -130,6 +160,23 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       addToolResult = () => {
         throw new Error('addToolResult not implemented');
       },
+      agentMode = 'chat',
+      setAgentMode,
+      agentExecutor,
+      onTemplateSelect,
+      bmadState,
+      bmadExecutor,
+
+      /*
+       * showCommandAutoComplete = false,
+       * onCommandSelect,
+       * onCommandAutoCompleteClose,
+       * contextFiles = [],
+       * onRemoveContextFile,
+       * onClearContext,
+       * showContextDisplay = false,
+       * onToggleContextDisplay,
+       */
     },
     ref,
   ) => {
@@ -348,7 +395,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         <ClientOnly>{() => <Menu />}</ClientOnly>
         <div className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
           <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
-            {!chatStarted && (
+            {!chatStarted && typeof window !== 'undefined' && !window.location.pathname.startsWith('/chat/') && (
               <div id="intro" className="mt-[16vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
                 <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
                   Where ideas begin
@@ -359,8 +406,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </div>
             )}
             <StickToBottom
-              className={classNames('pt-6 px-2 sm:px-6 relative', {
-                'h-full flex flex-col modern-scrollbar': chatStarted,
+              className={classNames('px-2 sm:px-6 relative', {
+                'h-full flex flex-col modern-scrollbar pt-4': chatStarted,
+                'pt-6': !chatStarted,
               })}
               resize="smooth"
               initial="smooth"
@@ -423,7 +471,48 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   )}
                   {llmErrorAlert && <LlmErrorAlert alert={llmErrorAlert} clearAlert={() => clearLlmErrorAlert?.()} />}
                 </div>
+                {agentMode === 'agent' && (
+                  <>
+                    <AgentStatus />
+                    <AgentControls agentExecutor={agentExecutor} />
+                  </>
+                )}
+                {bmadState?.isActive && bmadExecutor && (
+                  <BmadControls
+                    onOutput={(message) => {
+                      // Add BMad output to chat only if it's a command response
+                      if (message.startsWith('[BMad]') || message.includes('===')) {
+                        sendMessage?.({} as any, message);
+                      }
+                    }}
+                    onAgentChange={(agent) => {
+                      // Handle agent change if needed
+                      console.log('BMad agent changed:', agent);
+                    }}
+                  />
+                )}
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
+
+                {/* Context Display */}
+                {/* {showContextDisplay && contextFiles.length > 0 && (
+                  <ContextDisplay
+                    files={contextFiles}
+                    onRemoveFile={onRemoveContextFile || (() => {})}
+                    onClearAll={onClearContext || (() => {})}
+                    className="mb-2"
+                  />
+                )} */}
+
+                {/* Context Indicator */}
+                {/* {!showContextDisplay && contextFiles.length > 0 && (
+                  <div className="flex justify-end mb-2">
+                    <ContextIndicator
+                      fileCount={contextFiles.length}
+                      onClick={onToggleContextDisplay || (() => {})}
+                    />
+                  </div>
+                )} */}
+
                 <ChatBox
                   isModelSettingsCollapsed={isModelSettingsCollapsed}
                   setIsModelSettingsCollapsed={setIsModelSettingsCollapsed}
@@ -465,6 +554,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   setDesignScheme={setDesignScheme}
                   selectedElement={selectedElement}
                   setSelectedElement={setSelectedElement}
+                  agentMode={agentMode}
+                  setAgentMode={setAgentMode}
+
+                  /*
+                   * showCommandAutoComplete={showCommandAutoComplete}
+                   * onCommandSelect={onCommandSelect}
+                   * onCommandAutoCompleteClose={onCommandAutoCompleteClose}
+                   */
                 />
               </div>
             </StickToBottom>
@@ -476,7 +573,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </div>
               )}
               <div className="flex flex-col gap-5">
+                {!chatStarted && agentMode === 'agent' && onTemplateSelect && (
+                  <TaskTemplates onSelectTemplate={onTemplateSelect} className="mb-6" />
+                )}
                 {!chatStarted &&
+                  agentMode === 'chat' &&
                   ExamplePrompts((event, messageInput) => {
                     if (isStreaming) {
                       handleStop?.();
@@ -485,7 +586,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                     handleSendMessage?.(event, messageInput);
                   })}
-                {!chatStarted && <StarterTemplates />}
+                {!chatStarted && agentMode === 'chat' && <StarterTemplates />}
               </div>
             </div>
           </div>

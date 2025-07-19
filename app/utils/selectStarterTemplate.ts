@@ -131,7 +131,7 @@ const getGitHubRepoContent = async (repoName: string): Promise<{ name: string; p
   }
 };
 
-export async function getTemplates(templateName: string, title?: string) {
+export async function getTemplates(templateName: string, _title?: string) {
   const template = STARTER_TEMPLATES.find((t) => t.name == templateName);
 
   if (!template) {
@@ -183,10 +183,23 @@ export async function getTemplates(templateName: string, title?: string) {
     filesToImport.ignoreFile = ignoredFiles;
   }
 
+  // Create optimized message with essential files only
+  const essentialFiles = filesToImport.files.filter(file =>
+    file.name === 'package.json' ||
+    file.name === 'index.html' ||
+    file.path === 'src/main.tsx' ||
+    file.path === 'src/main.ts' ||
+    file.path === 'src/App.tsx' ||
+    file.path === 'src/App.ts' ||
+    file.name === 'vite.config.ts' ||
+    file.name === 'vite.config.js'
+  );
+
   const assistantMessage = `
-Bolt is initializing your project with the required files using the ${template.name} template.
-<boltArtifact id="imported-files" title="${title || 'Create initial files'}" type="bundled">
-${filesToImport.files
+I'll help you create a project using the ${template.name} template. Let me start by setting up the essential files and structure.
+
+<boltArtifact id="project-setup" title="Project Setup - ${template.name}" type="bundled">
+${essentialFiles
   .map(
     (file) =>
       `<boltAction type="file" filePath="${file.path}">
@@ -195,7 +208,9 @@ ${file.content}
   )
   .join('\n')}
 </boltArtifact>
-`;
+
+Now I'll create the remaining ${filesToImport.files.length - essentialFiles.length} files to complete your project structure.`;
+
   let userMessage = ``;
   const templatePromptFile = files.filter((x) => x.path.startsWith('.bolt')).find((x) => x.name == 'prompt');
 
@@ -251,5 +266,8 @@ IMPORTANT: Dont Forget to install the dependencies before running the app by usi
   return {
     assistantMessage,
     userMessage,
+    remainingFiles: filesToImport.files.filter(file => !essentialFiles.includes(file)),
+    totalFiles: filesToImport.files.length,
+    templateName: template.name,
   };
 }

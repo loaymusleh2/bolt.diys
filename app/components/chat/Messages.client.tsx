@@ -1,14 +1,13 @@
 import type { Message } from 'ai';
-import { Fragment } from 'react';
+import type { ForwardedRef } from 'react';
+import { forwardRef, Fragment } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
 import { useLocation } from '@remix-run/react';
-import { db, chatId } from '~/lib/persistence/useChatHistory';
+import { chatId, getDb } from '~/lib/persistence/useChatHistory';
 import { forkChat } from '~/lib/persistence/db';
 import { toast } from 'react-toastify';
-import { forwardRef } from 'react';
-import type { ForwardedRef } from 'react';
 import type { ProviderInfo } from '~/types/model';
 
 interface MessagesProps {
@@ -37,6 +36,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     const handleFork = async (messageId: string) => {
       try {
+        const db = await getDb();
+
         if (!db || !chatId.get()) {
           toast.error('Chat persistence is not available');
           return;
@@ -67,6 +68,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   key={index}
                   className={classNames('flex gap-4 py-3 w-full rounded-lg', {
                     'mt-4': !isFirst,
+                    'pt-1': isFirst, // 为第一条消息添加少量顶部间距
                   })}
                 >
                   <div className="grid grid-col-1 w-full">

@@ -1,4 +1,4 @@
-import type { ProviderName, ProviderConfig, StatusCheckResult } from './types';
+import type { ProviderConfig, ProviderName, StatusCheckResult } from './types';
 import { BaseProviderChecker } from './base-provider';
 
 import { AmazonBedrockStatusChecker } from './providers/amazon-bedrock';
@@ -63,6 +63,12 @@ export class ProviderStatusCheckerFactory {
       apiUrl: 'https://api.mistral.ai/v1/models',
       headers: {},
       testModel: 'mistral-tiny',
+    },
+    Moonshot: {
+      statusUrl: 'https://status.moonshot.cn/',
+      apiUrl: 'https://api.moonshot.cn/v1/models',
+      headers: {},
+      testModel: 'kimi-k2-0711-preview',
     },
     OpenRouter: {
       statusUrl: 'https://status.openrouter.ai/',

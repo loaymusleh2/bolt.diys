@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * Hook to initialize and provide access to the IndexedDB database
@@ -12,6 +12,11 @@ export function useIndexedDB() {
     const initDB = async () => {
       try {
         setIsLoading(true);
+
+        // Check if indexedDB is available
+        if (typeof indexedDB === 'undefined') {
+          throw new Error('IndexedDB is not available in this environment');
+        }
 
         const request = indexedDB.open('boltDB', 1);
 

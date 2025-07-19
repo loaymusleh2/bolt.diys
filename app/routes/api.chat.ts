@@ -1,8 +1,8 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createDataStream, generateId } from 'ai';
-import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS, type FileMap } from '~/lib/.server/llm/constants';
+import { type FileMap, MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
-import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
+import { type Messages, type StreamingOptions, streamText } from '~/lib/.server/llm/stream-text';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import type { IProviderSetting } from '~/types/model';
 import { createScopedLogger } from '~/utils/logger';
@@ -13,6 +13,7 @@ import { createSummary } from '~/lib/.server/llm/create-summary';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import type { DesignScheme } from '~/types/design-scheme';
 import { MCPService } from '~/lib/services/mcpService';
+import { countMessagesTokens, getModelContextWindow } from '~/lib/.server/llm/token-counter';
 
 export async function action(args: ActionFunctionArgs) {
   return chatAction(args);
@@ -46,6 +47,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
       promptId?: string;
       contextOptimization: boolean;
       chatMode: 'discuss' | 'build';
+      agentMode?: 'chat' | 'agent';
       designScheme?: DesignScheme;
       supabase?: {
         isConnected: boolean;
@@ -77,7 +79,17 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   try {
     const mcpService = MCPService.getInstance();
     const totalMessageContent = messages.reduce((acc, message) => acc + message.content, '');
-    logger.debug(`Total message length: ${totalMessageContent.split(' ').length}, words`);
+    logger.debug(`Total message length: ${totalMessageContent.split(' ').length} words`);
+
+    // Get model information for context window calculation
+    const lastUserMessage = messages.filter((x) => x.role === 'user').slice(-1)[0];
+    const { model: currentModel } = extractPropertiesFromMessage(lastUserMessage || messages[0]);
+    const modelContextWindow = getModelContextWindow(currentModel);
+    const currentMessageTokens = countMessagesTokens(messages, currentModel);
+
+    logger.info(
+      `Model: ${currentModel}, Context Window: ${modelContextWindow}, Current Message Tokens: ${currentMessageTokens}`,
+    );
 
     let lastChunk: string | undefined = undefined;
 
@@ -395,6 +407,29 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           status: 401,
           headers: { 'Content-Type': 'application/json' },
           statusText: 'Unauthorized',
+        },
+      );
+    }
+
+    // Handle context length errors specifically
+    if (
+      error.message?.includes('context length') ||
+      error.message?.includes('maximum context') ||
+      error.message?.includes('token')
+    ) {
+      return new Response(
+        JSON.stringify({
+          ...errorResponse,
+          message:
+            'The conversation is too long for the current model. Please start a new conversation or try enabling context optimization.',
+          statusCode: 413,
+          isRetryable: true,
+          contextError: true,
+        }),
+        {
+          status: 413,
+          headers: { 'Content-Type': 'application/json' },
+          statusText: 'Payload Too Large',
         },
       );
     }
