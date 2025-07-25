@@ -36,7 +36,6 @@ export default defineConfig((config) => {
               map: null,
             };
           }
-
           return null;
         },
       },
@@ -54,6 +53,15 @@ export default defineConfig((config) => {
       chrome129IssuePlugin(),
       config.mode === 'production' && optimizeCssModules({ apply: 'build' }),
     ],
+    // Allow Railway host for development and preview
+    server: {
+      host: true,
+      allowedHosts: [
+        'boltdiys-production.up.railway.app',
+        // To allow all Railway subdomains, you could use:
+        // '.up.railway.app'
+      ],
+    },
     envPrefix: [
       'VITE_',
       'OPENAI_LIKE_API_BASE_URL',
